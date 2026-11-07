@@ -1,0 +1,21 @@
+{
+  "name": "parking-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "format": "prettier --write src index.html vite.config.js package.json",
+    "format:check": "prettier --check src index.html vite.config.js package.json"
+  },
+  "dependencies": {
+    "vue": "3.5.45"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "5.2.4",
+    "vite": "6.4.5",
+    "prettier": "3.6.2"
+  }
+}

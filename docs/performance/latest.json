@@ -1,0 +1,30 @@
+{
+  "measuredAt": "2026-11-07T07:21:34.596Z",
+  "baseUrl": "http://127.0.0.1:8091",
+  "database": "parking_test",
+  "node": "v24.15.0",
+  "scenario": "time-window resource reads; 20 warmup requests excluded",
+  "requests": 500,
+  "concurrency": 20,
+  "elapsedMs": 839.0035,
+  "throughputPerSecond": 595.9450705509572,
+  "latencyMs": {
+    "p50": 30.594800000000077,
+    "p95": 52.168799999999976,
+    "p99": 65.59860000000003,
+    "max": 185.10499999999996
+  },
+  "statuses": {
+    "200": 500
+  },
+  "correctness": {
+    "concurrentReservations": 20,
+    "created": 1,
+    "expectedConflicts": 19,
+    "idempotentRequests": 20,
+    "uniqueBookingIds": 1,
+    "repeatedPayments": 20,
+    "passed": true
+  },
+  "limitations": "Single local process and local MySQL, small seeded dataset; not production capacity. HTTP latency includes local network and client scheduling."
+}

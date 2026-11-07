@@ -1,0 +1,39 @@
+server:
+  port: ${SERVER_PORT:8090}
+  error:
+    include-message: never
+    include-stacktrace: never
+spring:
+  application:
+    name: parking
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:127.0.0.1}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:parking}?connectionTimeZone=UTC&serverTimezone=UTC&characterEncoding=UTF-8
+    username: ${MYSQL_USER:parking_app}
+    password: ${MYSQL_PASSWORD}
+    hikari:
+      maximum-pool-size: 16
+      connection-timeout: 5000
+  jackson:
+    deserialization:
+      fail-on-unknown-properties: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    banner: false
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+parking:
+  hold-minutes: 5
+  session-hours: 24
+  seed-enabled: ${SEED_ENABLED:true}
+  # 本地模拟设备以两分钟为心跳超时阈值，计费单价按入场时快照保存。
+  device-offline-seconds: ${DEVICE_OFFLINE_SECONDS:120}
+  energy-rate: ${ENERGY_RATE:1.20}
+  operations-delay-ms: ${OPERATIONS_DELAY_MS:30000}
