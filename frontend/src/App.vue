@@ -12,6 +12,8 @@ import GuideView from './GuideView.vue'
 import UsageView from './UsageView.vue'
 import SimulatorView from './SimulatorView.vue'
 import OperationsView from './OperationsView.vue'
+import InfrastructureView from './InfrastructureView.vue'
+import NotificationsView from './NotificationsView.vue'
 
 const user = ref(null)
 const view = ref('explore')
@@ -44,6 +46,18 @@ const bookingStatus = ref('')
 const bookingPage = ref(1)
 const bookingResult = ref({ items: [], total: 0, page: 1, size: 8 })
 const currentWindow = ref(null)
+const advancedSearch = ref(false)
+const searchFilters = reactive({
+  keyword: '',
+  nearby: false,
+  latitude: 30.2741,
+  longitude: 120.101,
+  radiusKm: 3,
+  minPowerKw: '',
+  maxHourlyRate: '',
+  sort: 'RELEVANCE',
+})
+const searchTruncated = ref(false)
 let resourceSequence = 0
 let listSequence = 0
 let searchTimer
@@ -63,12 +77,14 @@ const navigation = computed(() => [
   { id: 'explore', label: '找位预约', icon: 'grid' },
   { id: 'bookings', label: '我的预约', icon: 'calendar' },
   ...(user.value ? [{ id: 'usage', label: '会话与账单', icon: 'bolt' }] : []),
+  ...(user.value ? [{ id: 'notifications', label: '我的通知', icon: 'info' }] : []),
   ...(isAdmin.value ? [{ id: 'admin', label: '运营管理', icon: 'settings' }] : []),
   ...(isAdmin.value
     ? [
         { id: 'simulator', label: '设备模拟', icon: 'car' },
         { id: 'operations', label: '运营中心', icon: 'grid' },
         { id: 'all-usage', label: '平台会话账单', icon: 'calendar' },
+        { id: 'infrastructure', label: '消息与搜索', icon: 'settings' },
       ]
     : []),
   { id: 'guide', label: '使用指南', icon: 'info' },
@@ -95,7 +111,30 @@ async function loadResources() {
     const query = new URLSearchParams({ startAt: window.startAt, endAt: window.endAt })
     if (filters.parkCode) query.set('parkCode', filters.parkCode)
     if (filters.type) query.set('type', filters.type)
-    const result = await api(`/resources?${query}`)
+    let result
+    searchTruncated.value = false
+    if (advancedSearch.value) {
+      if (searchFilters.keyword.trim()) query.set('keyword', searchFilters.keyword.trim())
+      if (searchFilters.minPowerKw !== '') query.set('minPowerKw', searchFilters.minPowerKw)
+      if (searchFilters.maxHourlyRate !== '')
+        query.set('maxHourlyRate', searchFilters.maxHourlyRate)
+      if (searchFilters.nearby) {
+        query.set('latitude', searchFilters.latitude)
+        query.set('longitude', searchFilters.longitude)
+        query.set('radiusKm', searchFilters.radiusKm)
+      }
+      query.set(
+        'sort',
+        searchFilters.sort === 'DISTANCE' && !searchFilters.nearby
+          ? 'RELEVANCE'
+          : searchFilters.sort,
+      )
+      const found = await api(`/search/resources?${query}`)
+      result = found.items
+        .map((item) => ({ ...item.resource, distanceKm: item.distanceKm }))
+        .filter((item) => !filters.parkCode || item.parkCode === filters.parkCode)
+      searchTruncated.value = found.truncated
+    } else result = await api(`/resources?${query}`)
     if (sequence !== resourceSequence) return
     resources.value = result
     currentWindow.value = window
@@ -193,7 +232,17 @@ function sessionExpired() {
   selectedResource.value = null
   actionDialog.value = null
   bookingResult.value = { items: [], total: 0, page: 1, size: 8 }
-  if (['admin', 'simulator', 'operations', 'all-usage', 'usage'].includes(view.value))
+  if (
+    [
+      'admin',
+      'simulator',
+      'operations',
+      'all-usage',
+      'usage',
+      'infrastructure',
+      'notifications',
+    ].includes(view.value)
+  )
     view.value = 'explore'
   notify('登录已失效，请重新登录', 'error')
 }
@@ -272,7 +321,14 @@ function closeBookingDialog() {
 }
 
 watch(
-  () => [filters.parkCode, filters.type, filters.date, filters.start, filters.end],
+  () => [
+    filters.parkCode,
+    filters.type,
+    filters.date,
+    filters.start,
+    filters.end,
+    advancedSearch.value,
+  ],
   () => {
     // Invalidate old availability immediately while inputs change.
     ++resourceSequence
@@ -355,7 +411,7 @@ onUnmounted(() => {
         <div class="version-label">
           <i />
           本地演示 · 预约与履约
-          <span>V1.0</span>
+          <span>V3.0</span>
         </div>
       </div>
     </aside>
@@ -513,6 +569,93 @@ onUnmounted(() => {
               {{ loading ? '查询中' : '查找车位' }}
             </button>
           </section>
+
+          <details class="phase-card advanced-search">
+            <summary>关键词与附近搜索</summary>
+            <label class="phase-inline">
+              <input v-model="advancedSearch" type="checkbox" />
+              启用关键词与附近搜索
+            </label>
+            <template v-if="advancedSearch">
+              <p>可输入园区、地址或设施关键词；附近筛选使用下方指定位置。示例坐标为演示数据。</p>
+              <form class="phase-form" @submit.prevent="loadResources">
+                <label>
+                  园区或设施关键词
+                  <input
+                    v-model="searchFilters.keyword"
+                    maxlength="80"
+                    placeholder="例如：科创园、快充"
+                  />
+                </label>
+                <label>
+                  最低充电功率 kW
+                  <input v-model="searchFilters.minPowerKw" type="number" min="0" max="1000" />
+                </label>
+                <label>
+                  最高停车单价 元/小时
+                  <input
+                    v-model="searchFilters.maxHourlyRate"
+                    type="number"
+                    min="0"
+                    max="10000"
+                    step="0.01"
+                  />
+                </label>
+                <label>
+                  结果排序
+                  <select v-model="searchFilters.sort">
+                    <option value="RELEVANCE">相关度</option>
+                    <option value="PRICE">价格从低到高</option>
+                    <option value="DISTANCE" :disabled="!searchFilters.nearby">距离从近到远</option>
+                  </select>
+                </label>
+                <label class="phase-inline">
+                  <input v-model="searchFilters.nearby" type="checkbox" />
+                  筛选附近车位
+                </label>
+                <template v-if="searchFilters.nearby">
+                  <label>
+                    搜索中心纬度
+                    <input
+                      v-model="searchFilters.latitude"
+                      type="number"
+                      step="0.000001"
+                      min="-90"
+                      max="90"
+                      required
+                    />
+                  </label>
+                  <label>
+                    搜索中心经度
+                    <input
+                      v-model="searchFilters.longitude"
+                      type="number"
+                      step="0.000001"
+                      min="-180"
+                      max="180"
+                      required
+                    />
+                  </label>
+                  <label>
+                    搜索半径 km
+                    <input
+                      v-model="searchFilters.radiusKm"
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      max="100"
+                      required
+                    />
+                  </label>
+                </template>
+                <button class="button primary" :disabled="loading">应用搜索条件</button>
+                <button class="button quiet" type="button" @click="advancedSearch = false">
+                  返回基础查询
+                </button>
+              </form>
+              <p v-if="searchTruncated">候选超过 100 个，请缩小范围后查询。</p>
+            </template>
+          </details>
 
           <section class="resource-section">
             <div class="section-heading">
@@ -763,6 +906,8 @@ onUnmounted(() => {
         <UsageView v-else-if="view === 'all-usage' && isAdmin" :key="`all-${user.id}`" all />
         <SimulatorView v-else-if="view === 'simulator' && isAdmin" />
         <OperationsView v-else-if="view === 'operations' && isAdmin" />
+        <InfrastructureView v-else-if="view === 'infrastructure' && isAdmin" />
+        <NotificationsView v-else-if="view === 'notifications' && user" :key="user.id" />
         <GuideView v-else-if="view === 'guide'" />
         <footer class="page-footer">
           <span>泊序 PARK & RECHARGE</span>

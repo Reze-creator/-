@@ -11,12 +11,14 @@ import java.util.UUID;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Idempotent local-demo seed. Never resets an existing account's password or booking history. */
 @Component
+@Order(0)
 @ConditionalOnProperty(name = "parking.seed-enabled", havingValue = "true")
 public class DemoDataInitializer implements ApplicationRunner {
   private final UserMapper users;
@@ -69,6 +71,10 @@ public class DemoDataInitializer implements ApplicationRunner {
       resource.setPowerKw(charging ? (index == 6 ? 120 : 60) : 0);
       resource.setHourlyRate(new BigDecimal(code.equals("north") ? "6.00" : "8.00"));
       resource.setEnabled(true);
+      resource.setLatitude(new BigDecimal(code.equals("north") ? "30.274100" : "30.208400"));
+      resource.setLongitude(new BigDecimal(code.equals("north") ? "120.101000" : "120.211000"));
+      resource.setDescription("园区停车，支持直流快充");
+      resource.setSearchVersion(1L);
       resource.setCreatedAt(clock.instant());
       resources.insert(resource);
     }

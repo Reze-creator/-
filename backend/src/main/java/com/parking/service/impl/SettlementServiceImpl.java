@@ -8,6 +8,7 @@ import com.parking.entity.UsageBillEntity;
 import com.parking.entity.UsageSessionEntity;
 import com.parking.mapper.PaymentMapper;
 import com.parking.mapper.UsageBillMapper;
+import com.parking.service.OutboxService;
 import com.parking.service.SettlementService;
 import java.math.BigDecimal;
 import java.time.Clock;
@@ -22,11 +23,14 @@ public class SettlementServiceImpl implements SettlementService {
   private final UsageBillMapper bills;
   private final PaymentMapper payments;
   private final Clock clock;
+  private final OutboxService outbox;
 
-  public SettlementServiceImpl(UsageBillMapper bills, PaymentMapper payments, Clock clock) {
+  public SettlementServiceImpl(
+      UsageBillMapper bills, PaymentMapper payments, Clock clock, OutboxService outbox) {
     this.bills = bills;
     this.payments = payments;
     this.clock = clock;
+    this.outbox = outbox;
   }
 
   @Override
@@ -63,5 +67,6 @@ public class SettlementServiceImpl implements SettlementService {
     // 预付款已计入最终账单；不把差额退款误标为预约取消时的全额退款。
     payment.setStatus("SETTLED");
     payments.updateById(payment);
+    outbox.enqueue("BILL_SETTLED", bill.getId());
   }
 }

@@ -13,4 +13,7 @@ public record ResourceView(
     int powerKw,
     BigDecimal hourlyRate,
     boolean enabled,
-    Boolean available) {}
+    Boolean available,
+    BigDecimal latitude,
+    BigDecimal longitude,
+    String description) {}

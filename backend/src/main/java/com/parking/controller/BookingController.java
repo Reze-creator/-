@@ -5,6 +5,7 @@ import com.parking.common.Pages;
 import com.parking.common.Types.BookingStatus;
 import com.parking.common.UserContext;
 import com.parking.dto.CreateBookingRequest;
+import com.parking.infrastructure.RedisSupport;
 import com.parking.service.BookingService;
 import com.parking.vo.BookingView;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,15 +27,18 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "03 我的预约")
 public class BookingController {
   private final BookingService bookings;
+  private final RedisSupport limits;
 
-  public BookingController(BookingService bookings) {
+  public BookingController(BookingService bookings, RedisSupport limits) {
     this.bookings = bookings;
+    this.limits = limits;
   }
 
   @PostMapping
   @Operation(summary = "预占时段并创建待支付预约，同一requestId幂等")
   public ApiResponse<BookingView> create(
       HttpServletRequest http, @Valid @RequestBody CreateBookingRequest request) {
+    limits.limit("booking-user", UserContext.current(http).id(), 30, 60);
     return ApiResponse.ok(bookings.create(UserContext.current(http), request));
   }
 

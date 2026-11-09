@@ -14,6 +14,8 @@
 | requestId | apifox-booking-001，每个新业务尝试更换 |
 | eventId | apifox-enter-001，每个新设备事件更换，重发保持原值 |
 | incidentId | 管理员工单列表返回的id |
+| messageId | 管理员消息列表返回的Outbox消息id |
+| notificationId | 本人通知列表返回的id |
 | startAt | 测试时未来日期，例如明天09:00，带+08:00 |
 | endAt | 对应日期12:00，带+08:00 |
 

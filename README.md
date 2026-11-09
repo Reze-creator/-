@@ -2,7 +2,7 @@
 
 以代码可读性为主的 Java 后端实习项目，配套 Vue 界面。当前流程：**预约 → 模拟预付 → 模拟入场 → 停车或充电 → 离场计费 → 模拟补退差额 → 异常处理与监控**。
 
-按最新要求，**AI 模块暂不实现**。没有引入微服务、Redis、RabbitMQ 或真实设备。全部设备、支付和退款均为本地模拟，不发生真实资金交易。
+按最新要求，**AI 模块暂不实现**。已接入 Redis 缓存与限流、RabbitMQ 事务消息、Elasticsearch 关键词与附近搜索，仍为单体应用。全部设备、支付和退款均为本地模拟，不发生真实资金交易。
 
 ## 本机启动
 
@@ -18,7 +18,7 @@ cd D:\parking
 .\scripts\start.ps1 -Build -Background
 ```
 
-访问 **http://localhost:8090**。新版首次启动由 Flyway 执行 V2 增量迁移，新增设备、事件、会话、账单、工单和审计表，保留第一阶段账号与预约。
+访问 **http://localhost:8090**。Flyway 通过 V2、V3 增量迁移扩展会话、账单、运营、搜索资料、Outbox 和通知，保留原账号和预约。当前虚拟机连接已写入本机 `.env`，详细端口及新机器配置见[中间件设计](docs/11-中间件设计与接口.md)。
 
 | 账号 | 密码 | 用途 |
 | --- | --- | --- |
@@ -36,6 +36,10 @@ cd D:\parking
 5. 打开“平台会话账单”看最终费用；demo 仅能查看本人数据。
 6. 在设备模拟发送故障心跳，运营中心出现工单；先恢复正常心跳，再填写说明关单。
 7. 运营中心还能看请求次数、平均及窗口最大耗时、操作审计及请求标识。
+8. 首页展开“关键词与附近搜索”，启用后查询“快充”、最低功率、价格和指定位置附近资源；关闭后恢复基础查询。
+9. admin 打开“消息与搜索”，看中间件状态、Outbox、缓存限流指标，维护搜索资料或同步索引；demo 的“我的通知”可查看异步结算通知。
+
+开启 MQ 后事件通常先显示 WAITING，稍后刷新才能看到 APPLIED；同一次批次重发保留原事件号。
 
 普通车位批次包括入场和离场；充电车位包括入场、开始充电、电表、停止充电、离场。手动事件支持补发、失败场景和填写原因后重试或跳过。
 
@@ -54,7 +58,7 @@ cd D:\parking
 
 ## 技术与结构
 
-Java17、Spring Boot3.5.16、MyBatis-Plus3.5.18、MySQL8.0、Flyway、Springdoc、Micrometer；Vue3.5.45、Vite6.4.5、原生CSS。认证是随机会话令牌与BCrypt，不是JWT。
+Java17、Spring Boot3.5.16、MyBatis-Plus3.5.18、MySQL8.0、Flyway、Springdoc、Micrometer；Spring Data Redis/Lettuce、Spring AMQP/RabbitMQ、Spring RestClient 访问 Elasticsearch HTTP API；Vue3.5.45、Vite6.4.5、原生CSS。认证是随机会话令牌与BCrypt，不是JWT。
 
 ```text
 backend/src/main/java/com/parking/
@@ -82,6 +86,8 @@ scripts/               构建、启动、测试和隔离压测
 
 ```powershell
 .\scripts\build.ps1 -MySqlTests
+# 包含真实 Redis、RabbitMQ、Elasticsearch 的隔离集成测试
+.\scripts\build.ps1 -InfrastructureTests
 .\scripts\load-test.ps1 -Requests 500 -Concurrency 20
 ```
 
@@ -94,6 +100,7 @@ scripts/               构建、启动、测试和隔离压测
 - [会话与运营设计](docs/07-会话与运营设计.md)
 - [原预约接口](docs/02-接口文档.md)、[会话与运营接口](docs/08-会话与运营接口文档.md)
 - [本轮验收报告](docs/09-会话与运营验收报告.md)、[代码阅读指南](docs/10-代码阅读指南.md)
+- [中间件设计与新增接口](docs/11-中间件设计与接口.md)、[中间件验收报告](docs/12-中间件验收报告.md)
 - Apifox导入 `docs/apifox-openapi.json`，在线 `/v3/api-docs` 和 `/swagger-ui/index.html`。
 - `docs/设计说明书` 中两份Word文件是第一阶段历史基线；新增实现和已修正边界以本轮设计为准。
 
@@ -101,4 +108,4 @@ scripts/               构建、启动、测试和隔离压测
 
 ## 范围
 
-第二阶段及第四阶段中的工单、审计、进程内监控、正确性验证和隔离压测已实现；AI及AI评测暂缓。当前没有真实设备认证、真实支付、生产TLS、分布式调度、外部告警、Prometheus/Grafana、长期指标存储、多段充电或商业峰谷电价。
+预约、履约和运营已实现，并加入资料缓存与限流、可靠消息、异步通知、附近搜索与工单检索。AI及AI评测暂缓。当前没有真实设备认证、真实支付、生产TLS、外部告警、Prometheus/Grafana、长期指标存储、多段充电或商业峰谷电价。RabbitMQ 为单 broker，搜索每次最多100个候选，计数为进程内指标；不能据此宣称生产高可用或大规模容量。

@@ -8,6 +8,9 @@ import java.time.Instant;
 import java.util.List;
 
 public interface ResourceService {
+  ResourceView updateSearchProfile(
+      com.parking.vo.UserView actor, String id, com.parking.dto.SearchProfileRequest request);
+
   List<ParkView> parks();
 
   List<ResourceView> list(

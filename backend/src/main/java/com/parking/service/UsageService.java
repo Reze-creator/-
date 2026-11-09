@@ -9,6 +9,8 @@ import com.parking.vo.UsageView;
 import com.parking.vo.UserView;
 
 public interface UsageService {
+  void processPendingEvent(String eventId);
+
   EventView receive(UserView actor, DeviceEventRequest request);
 
   EventView handleEvent(UserView actor, String eventId, EventActionRequest request);

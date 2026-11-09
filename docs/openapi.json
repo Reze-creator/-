@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "泊序 Parking · 预约 会话与运营接口",
-    "description": "时段预约、模拟设备、停车充电会话、模拟结算与运营；AI模块暂缓。设备操作仅限管理员。",
-    "version": "2.0.0"
+    "title": "泊序 Parking · 预约 履约 消息与搜索接口",
+    "description": "时段预约、异步设备事件、停车充电结算、运营、站内通知及附近搜索；AI模块暂缓。设备操作仅限管理员。",
+    "version": "3.0.0"
   },
   "servers": [
     {
@@ -12,6 +12,42 @@
     }
   ],
   "paths": {
+    "/api/notifications/{id}/read": {
+      "post": {
+        "tags": [
+          "notification-controller"
+        ],
+        "summary": "将本人通知标记为已读，重复调用幂等",
+        "operationId": "read",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseNotificationView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/bookings": {
       "get": {
         "tags": [
@@ -280,6 +316,78 @@
         }
       }
     },
+    "/api/admin/search/rebuild": {
+      "post": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "从 MySQL 重新写入资源与工单搜索索引，小规模演示使用",
+        "operationId": "rebuild",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMapStringInteger"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/resources/{id}/search-profile": {
+      "post": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "更新资源经纬度与设施描述，并异步同步索引",
+        "operationId": "profile",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchProfileRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseResourceView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/admin/operations/scan": {
       "post": {
         "tags": [
@@ -340,6 +448,52 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponseIncidentView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/messages/{id}/retry": {
+      "post": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "恢复依赖后重试 DEAD 消息",
+        "operationId": "retry",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessageRetryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseOutboxView"
                 }
               }
             }
@@ -628,6 +782,141 @@
         ]
       }
     },
+    "/api/search/resources": {
+      "get": {
+        "tags": [
+          "search-controller"
+        ],
+        "summary": "关键词和附近车位搜索，MySQL 复核最新状态，最多100个候选",
+        "operationId": "resources",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 80,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "parkCode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "maxLength": 40,
+              "minLength": 0
+            }
+          },
+          {
+            "name": "latitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "maximum": 90.0,
+              "minimum": -90.0
+            }
+          },
+          {
+            "name": "longitude",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "maximum": 180.0,
+              "minimum": -180.0
+            }
+          },
+          {
+            "name": "radiusKm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double",
+              "maximum": 100.0,
+              "minimum": 0.1
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "PARKING",
+                "CHARGING"
+              ]
+            }
+          },
+          {
+            "name": "minPowerKw",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "maximum": 1000,
+              "minimum": 0
+            }
+          },
+          {
+            "name": "maxHourlyRate",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "maximum": 10000.0,
+              "minimum": 0.0
+            }
+          },
+          {
+            "name": "startAt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "endAt",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseSearchResults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/resources": {
       "get": {
         "tags": [
@@ -739,6 +1028,54 @@
             }
           }
         }
+      }
+    },
+    "/api/notifications": {
+      "get": {
+        "tags": [
+          "notification-controller"
+        ],
+        "summary": "本人站内通知分页",
+        "operationId": "list_2",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePagesNotificationView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
       }
     },
     "/api/bookings/{id}": {
@@ -899,13 +1236,57 @@
         ]
       }
     },
+    "/api/admin/search/incidents": {
+      "get": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "搜索工单标题、说明与处理结果，最多100条",
+        "operationId": "incidents",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseListIncidentView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
     "/api/admin/resources": {
       "get": {
         "tags": [
           "04 运营管理"
         ],
         "summary": "查看包括停用资源的完整列表",
-        "operationId": "resources",
+        "operationId": "resources_1",
         "responses": {
           "200": {
             "description": "OK",
@@ -957,7 +1338,7 @@
           "operations-controller"
         ],
         "summary": "异常工单分页",
-        "operationId": "incidents",
+        "operationId": "incidents_1",
         "parameters": [
           {
             "name": "status",
@@ -1043,6 +1424,88 @@
               "*/*": {
                 "schema": {
                   "$ref": "#/components/schemas/ApiResponsePagesAuditView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/messages": {
+      "get": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "Outbox 消息分页",
+        "operationId": "messages",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 1
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponsePagesOutboxView"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/admin/infrastructure": {
+      "get": {
+        "tags": [
+          "infrastructure-controller"
+        ],
+        "summary": "中间件状态、缓存限流指标、消息积压",
+        "operationId": "status_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiResponseMapStringObject"
                 }
               }
             }
@@ -1196,6 +1659,48 @@
   },
   "components": {
     "schemas": {
+      "ApiResponseNotificationView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/NotificationView"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "NotificationView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "bookingId": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "CreateBookingRequest": {
         "type": "object",
         "properties": {
@@ -1437,6 +1942,120 @@
           "username"
         ]
       },
+      "ApiResponseMapStringInteger": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "SearchProfileRequest": {
+        "type": "object",
+        "properties": {
+          "latitude": {
+            "type": "number",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "description",
+          "latitude",
+          "longitude"
+        ]
+      },
+      "ApiResponseResourceView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResourceView"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "ResourceView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "parkCode": {
+            "type": "string"
+          },
+          "parkName": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "PARKING",
+              "CHARGING"
+            ]
+          },
+          "powerKw": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hourlyRate": {
+            "type": "number"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "latitude": {
+            "type": "number"
+          },
+          "longitude": {
+            "type": "number"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
       "ResolveIncidentRequest": {
         "type": "object",
         "properties": {
@@ -1502,6 +2121,76 @@
             "format": "date-time"
           },
           "resolvedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "MessageRetryRequest": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "reason"
+        ]
+      },
+      "ApiResponseOutboxView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/OutboxView"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "OutboxView": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "eventType": {
+            "type": "string"
+          },
+          "aggregateId": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "publishAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "processAttempts": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "publishedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "processedAt": {
             "type": "string",
             "format": "date-time"
           }
@@ -1698,63 +2387,6 @@
           "enabled"
         ]
       },
-      "ApiResponseResourceView": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "message": {
-            "type": "string"
-          },
-          "data": {
-            "$ref": "#/components/schemas/ResourceView"
-          },
-          "requestId": {
-            "type": "string"
-          }
-        }
-      },
-      "ResourceView": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "code": {
-            "type": "string"
-          },
-          "parkCode": {
-            "type": "string"
-          },
-          "parkName": {
-            "type": "string"
-          },
-          "location": {
-            "type": "string"
-          },
-          "type": {
-            "type": "string",
-            "enum": [
-              "PARKING",
-              "CHARGING"
-            ]
-          },
-          "powerKw": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "hourlyRate": {
-            "type": "number"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "available": {
-            "type": "boolean"
-          }
-        }
-      },
       "ApiResponsePagesUsageView": {
         "type": "object",
         "properties": {
@@ -1847,6 +2479,53 @@
           }
         }
       },
+      "ApiResponseSearchResults": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SearchResults"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "Item": {
+        "type": "object",
+        "properties": {
+          "resource": {
+            "$ref": "#/components/schemas/ResourceView"
+          },
+          "distanceKm": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SearchResults": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Item"
+            }
+          },
+          "candidateCount": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
       "ApiResponseListResourceView": {
         "type": "object",
         "properties": {
@@ -1900,6 +2579,46 @@
             "type": "string"
           },
           "resourceCount": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ApiResponsePagesNotificationView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PagesNotificationView"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "PagesNotificationView": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationView"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
             "type": "integer",
             "format": "int64"
           }
@@ -2054,6 +2773,26 @@
           }
         }
       },
+      "ApiResponseListIncidentView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IncidentView"
+            }
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
       "ApiResponseMapStringObject": {
         "type": "object",
         "properties": {
@@ -2163,6 +2902,46 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/AuditView"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "ApiResponsePagesOutboxView": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/PagesOutboxView"
+          },
+          "requestId": {
+            "type": "string"
+          }
+        }
+      },
+      "PagesOutboxView": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OutboxView"
             }
           },
           "page": {

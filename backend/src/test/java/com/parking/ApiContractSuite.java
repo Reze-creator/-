@@ -5,125 +5,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.*;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.test.web.servlet.MockMvc;
 
 /** Shared contract: run against H2 for fast feedback and MySQL for actual row-lock behavior. */
-abstract class ApiContractSuite {
-  @Autowired MockMvc mvc;
-  @Autowired ObjectMapper json;
-  @Autowired JdbcTemplate db;
-  @Autowired PasswordEncoder passwords;
-  protected String userToken;
-  protected String otherToken;
-  protected String adminToken;
-  protected String resourceId;
-  protected Instant start;
-  protected Instant end;
-  private String passwordHash;
-
-  @BeforeEach
-  void initialize() throws Exception {
-    for (String table :
-        List.of(
-            "operation_audit",
-            "operation_incident",
-            "usage_bill",
-            "device_event",
-            "usage_session",
-            "simulated_device",
-            "mock_payment",
-            "booking",
-            "user_session",
-            "parking_resource",
-            "app_user")) db.update("DELETE FROM " + table);
-    if (passwordHash == null) passwordHash = passwords.encode("Test@123");
-    for (String name : List.of("alice", "bob", "admin")) {
-      db.update(
-          "INSERT INTO app_user(id,username,password_hash,display_name,role,created_at) VALUES(?,?,?,?,?,?)",
-          UUID.randomUUID().toString(),
-          name,
-          passwordHash,
-          name,
-          name.equals("admin") ? "ADMIN" : "USER",
-          Timestamp.from(Instant.now()));
-    }
-    userToken = login("alice");
-    otherToken = login("bob");
-    adminToken = login("admin");
-    resourceId = UUID.randomUUID().toString();
-    db.update(
-        "INSERT INTO parking_resource(id,code,park_code,park_name,location,resource_type,power_kw,hourly_rate,enabled,created_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
-        resourceId,
-        "A-001",
-        "north",
-        "测试园区",
-        "测试地址",
-        "PARKING",
-        0,
-        new BigDecimal("6.00"),
-        true,
-        Timestamp.from(Instant.now()));
-    long bucket = Instant.now().getEpochSecond() / 1800;
-    start = Instant.ofEpochSecond((bucket + 4) * 1800);
-    end = start.plusSeconds(3600);
-  }
-
-  protected String login(String username) throws Exception {
-    return postJson(
-            "/api/auth/login", Map.of("username", username, "password", "Test@123"), null, 200)
-        .get("token")
-        .asText();
-  }
-
-  protected JsonNode postJson(String path, Object body, String token, int status) throws Exception {
-    var request = post(path).contentType("application/json").content(json.writeValueAsBytes(body));
-    if (token != null) request.header("Authorization", "Bearer " + token);
-    var response = mvc.perform(request).andExpect(status().is(status)).andReturn().getResponse();
-    return json.readTree(response.getContentAsByteArray()).get("data");
-  }
-
-  protected JsonNode getJson(String path, String token, int status) throws Exception {
-    var request = get(path);
-    if (token != null) request.header("Authorization", "Bearer " + token);
-    return json.readTree(
-            mvc.perform(request)
-                .andExpect(status().is(status))
-                .andReturn()
-                .getResponse()
-                .getContentAsByteArray())
-        .get("data");
-  }
-
-  protected Map<String, Object> booking(String requestId, Instant from, Instant to) {
-    return new LinkedHashMap<>(
-        Map.of(
-            "requestId",
-            requestId,
-            "resourceId",
-            resourceId,
-            "plateNumber",
-            "浙A12345",
-            "startAt",
-            from.toString(),
-            "endAt",
-            to.toString()));
-  }
-
-  protected JsonNode create(String key) throws Exception {
-    return postJson("/api/bookings", booking(key, start, end), userToken, 200);
-  }
-
+abstract class ApiContractSuite extends ApiFixture {
   @Test
   void registerAlwaysCreatesOrdinaryUserAndNeverReturnsHash() throws Exception {
     JsonNode registered =

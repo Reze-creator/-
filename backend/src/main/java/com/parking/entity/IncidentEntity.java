@@ -10,6 +10,8 @@ import lombok.Data;
 @Data
 @TableName("operation_incident")
 public class IncidentEntity {
+  private Long searchVersion;
+
   @TableId(type = IdType.INPUT)
   private String id;
 

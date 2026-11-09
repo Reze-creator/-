@@ -5,6 +5,7 @@ import com.parking.common.PublicEndpoint;
 import com.parking.common.UserContext;
 import com.parking.dto.LoginRequest;
 import com.parking.dto.RegisterRequest;
+import com.parking.infrastructure.RedisSupport;
 import com.parking.service.AuthService;
 import com.parking.vo.LoginView;
 import com.parking.vo.UserView;
@@ -27,15 +28,20 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "01 用户认证")
 public class AuthController {
   private final AuthService auth;
+  private final RedisSupport limits;
 
-  public AuthController(AuthService auth) {
+  public AuthController(AuthService auth, RedisSupport limits) {
     this.auth = auth;
+    this.limits = limits;
   }
 
   @PublicEndpoint
   @PostMapping("/login")
   @Operation(summary = "登录并获取Bearer会话")
-  public ApiResponse<LoginView> login(@Valid @RequestBody LoginRequest request) {
+  public ApiResponse<LoginView> login(
+      HttpServletRequest http, @Valid @RequestBody LoginRequest request) {
+    limits.limit("login-ip", http.getRemoteAddr(), 30, 60);
+    limits.limit("login-account", request.username().toLowerCase(java.util.Locale.ROOT), 10, 60);
     return ApiResponse.ok(auth.login(request));
   }
 
@@ -43,7 +49,9 @@ public class AuthController {
   @PostMapping("/register")
   @ResponseStatus(HttpStatus.CREATED)
   @Operation(summary = "注册普通用户并登录")
-  public ApiResponse<LoginView> register(@Valid @RequestBody RegisterRequest request) {
+  public ApiResponse<LoginView> register(
+      HttpServletRequest http, @Valid @RequestBody RegisterRequest request) {
+    limits.limit("register-ip", http.getRemoteAddr(), 10, 60);
     return ApiResponse.ok(auth.register(request));
   }
 

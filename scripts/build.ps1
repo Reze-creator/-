@@ -1,4 +1,4 @@
-param([switch]$MySqlTests)
+param([switch]$MySqlTests,[switch]$InfrastructureTests)
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Push-Location $projectRoot
@@ -19,7 +19,8 @@ try {
     }
     New-Item -ItemType Directory -Path $staticRoot -Force | Out-Null
     Copy-Item -Path (Join-Path $projectRoot 'frontend\dist\*') -Destination $staticRoot -Recurse
-    if ($MySqlTests) { . (Join-Path $PSScriptRoot 'load-env.ps1'); $env:PARKING_MYSQL_TEST = 'true' }
+    if ($MySqlTests -or $InfrastructureTests) { . (Join-Path $PSScriptRoot 'load-env.ps1'); $env:PARKING_MYSQL_TEST = 'true' }
+    if ($InfrastructureTests) { $env:PARKING_INFRA_TEST = 'true' }
     Push-Location (Join-Path $projectRoot 'backend')
     try {
         & mvn -B -ntp verify
@@ -28,5 +29,6 @@ try {
     Write-Output 'Build completed: backend\target\parking-1.0.0.jar (includes frontend).'
 } finally {
     Remove-Item Env:PARKING_MYSQL_TEST -ErrorAction SilentlyContinue
+    Remove-Item Env:PARKING_INFRA_TEST -ErrorAction SilentlyContinue
     Pop-Location
 }

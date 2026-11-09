@@ -4,6 +4,36 @@ server:
     include-message: never
     include-stacktrace: never
 spring:
+  task:
+    scheduling:
+      pool:
+        size: 3
+  data:
+    redis:
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      connect-timeout: 500ms
+      timeout: 500ms
+  rabbitmq:
+    host: ${RABBITMQ_HOST:127.0.0.1}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:parking}
+    password: ${RABBITMQ_PASSWORD:}
+    virtual-host: ${RABBITMQ_VHOST:/parking}
+    connection-timeout: 2s
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        auto-startup: ${MQ_ENABLED:false}
+        acknowledge-mode: manual
+        prefetch: 10
+        default-requeue-rejected: false
+  autoconfigure:
+    exclude: org.springframework.boot.autoconfigure.data.redis.RedisRepositoriesAutoConfiguration
   application:
     name: parking
   datasource:
@@ -17,6 +47,12 @@ spring:
     deserialization:
       fail-on-unknown-properties: true
 management:
+  health:
+    # 三个组件是可降级依赖，由管理员面板单独报告；基础健康检查仍检查 MySQL。
+    redis:
+      enabled: false
+    rabbit:
+      enabled: false
   endpoints:
     web:
       exposure:
@@ -30,6 +66,14 @@ springdoc:
   swagger-ui:
     path: /swagger-ui.html
 parking:
+  namespace: ${PARKING_NAMESPACE:parking}
+  redis-enabled: ${REDIS_ENABLED:false}
+  messaging-enabled: ${MQ_ENABLED:false}
+  search-enabled: ${SEARCH_ENABLED:false}
+  search-url: ${SEARCH_URL:http://127.0.0.1:9200}
+  search-username: ${SEARCH_USER:}
+  search-password: ${SEARCH_PASSWORD:}
+  outbox-delay-ms: ${OUTBOX_DELAY_MS:1000}
   hold-minutes: 5
   session-hours: 24
   seed-enabled: ${SEED_ENABLED:true}

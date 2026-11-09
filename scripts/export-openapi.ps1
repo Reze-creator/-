@@ -13,6 +13,8 @@ $examples = @{
     '/api/admin/device-events' = @{eventId='{{eventId}}';bookingId='{{bookingId}}';sequenceNo=1;type='ENTER';occurredAt='{{startAt}}';energyKwh=0}
     '/api/admin/device-events/{id}/action' = @{action='RETRY';reason='已恢复前置条件，重新处理'}
     '/api/admin/operations/incidents/{id}/resolve' = @{resolution='恢复正常心跳并确认设备正常'}
+    '/api/admin/messages/{id}/retry' = @{reason='依赖已恢复，重新处理'}
+    '/api/admin/resources/{id}/search-profile' = @{latitude=30.2741;longitude=120.101;description='园区停车与直流快充'}
 }
 foreach ($path in $document.paths.PSObject.Properties) {
     foreach ($operation in $path.Value.PSObject.Properties) {
@@ -25,6 +27,8 @@ foreach ($path in $document.paths.PSObject.Properties) {
                 $value = if ($path.Name -match '/resources/|/devices/') { '{{resourceId}}' }
                     elseif ($path.Name -match '/device-events/') { '{{eventId}}' }
                     elseif ($path.Name -match '/incidents/') { '{{incidentId}}' }
+                    elseif ($path.Name -match '/messages/') { '{{messageId}}' }
+                    elseif ($path.Name -match '/notifications/') { '{{notificationId}}' }
                     else { '{{bookingId}}' }
                 $parameter | Add-Member -NotePropertyName example -NotePropertyValue $value -Force
             }

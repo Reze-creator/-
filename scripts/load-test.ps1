@@ -6,12 +6,21 @@ if (Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyCon
 $savedDatabase = $env:MYSQL_DATABASE
 $savedPort = $env:SERVER_PORT
 $savedSeed = $env:SEED_ENABLED
+$savedRedis = $env:REDIS_ENABLED
+$savedMq = $env:MQ_ENABLED
+$savedSearch = $env:SEARCH_ENABLED
+$savedNamespace = $env:PARKING_NAMESPACE
 $testProcess = $null
 try {
     # 只使用已有隔离测试库。此脚本不删除表，也不接触业务库 parking。
     $env:MYSQL_DATABASE = 'parking_test'
     $env:SERVER_PORT = "$Port"
     $env:SEED_ENABLED = 'true'
+    # 此基准只测数据库预约流程，禁止测试实例消费正式实例的消息。
+    $env:REDIS_ENABLED = 'false'
+    $env:MQ_ENABLED = 'false'
+    $env:SEARCH_ENABLED = 'false'
+    $env:PARKING_NAMESPACE = 'parking_benchmark'
     $testProcess = Start-Process -FilePath java -ArgumentList @('-Dfile.encoding=UTF-8','-Duser.timezone=UTC','-jar','backend\target\parking-1.0.0.jar') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $projectRoot 'work\load-app.log') -RedirectStandardError (Join-Path $projectRoot 'work\load-error.log') -PassThru
     $ready = $false
     for ($attempt = 0; $attempt -lt 45; $attempt++) {
@@ -26,4 +35,8 @@ try {
     $env:MYSQL_DATABASE = $savedDatabase
     $env:SERVER_PORT = $savedPort
     $env:SEED_ENABLED = $savedSeed
+    $env:REDIS_ENABLED = $savedRedis
+    $env:MQ_ENABLED = $savedMq
+    $env:SEARCH_ENABLED = $savedSearch
+    $env:PARKING_NAMESPACE = $savedNamespace
 }

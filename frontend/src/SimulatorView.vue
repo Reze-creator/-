@@ -123,7 +123,7 @@ async function runScenario(order) {
       if (order === 'duplicate') await api('/admin/device-events', { method: 'POST', body: event })
     }
     await refresh()
-    message.value = '批次已接收，请查看每条事件状态及会话账单'
+    message.value = '批次已接收；异步处理需要少量时间，请稍后刷新事件状态和会话账单'
   })
 }
 async function submitEvent() {

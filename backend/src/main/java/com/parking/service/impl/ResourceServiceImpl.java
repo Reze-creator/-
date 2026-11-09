@@ -5,10 +5,13 @@ import com.parking.common.BookingRules;
 import com.parking.common.BusinessException;
 import com.parking.common.Types.ResourceType;
 import com.parking.common.Types.Role;
+import com.parking.dto.SearchProfileRequest;
 import com.parking.entity.ResourceEntity;
+import com.parking.infrastructure.RedisSupport;
 import com.parking.mapper.BookingMapper;
 import com.parking.mapper.ResourceMapper;
 import com.parking.service.OperationsService;
+import com.parking.service.OutboxService;
 import com.parking.service.ResourceService;
 import com.parking.vo.ParkView;
 import com.parking.vo.ResourceView;
@@ -30,17 +33,30 @@ public class ResourceServiceImpl implements ResourceService {
   private final BookingMapper bookings;
   private final Clock clock;
   private final OperationsService operations;
+  private final RedisSupport cache;
+  private final OutboxService outbox;
 
   public ResourceServiceImpl(
-      ResourceMapper resources, BookingMapper bookings, Clock clock, OperationsService operations) {
+      ResourceMapper resources,
+      BookingMapper bookings,
+      Clock clock,
+      OperationsService operations,
+      RedisSupport cache,
+      OutboxService outbox) {
     this.resources = resources;
     this.bookings = bookings;
     this.clock = clock;
     this.operations = operations;
+    this.cache = cache;
+    this.outbox = outbox;
   }
 
   @Override
   public List<ParkView> parks() {
+    return cache.parks(this::loadParks);
+  }
+
+  private List<ParkView> loadParks() {
     Map<String, List<ResourceEntity>> grouped = new LinkedHashMap<>();
     for (ResourceEntity e :
         resources.selectList(new QueryWrapper<ResourceEntity>().orderByAsc("park_code", "code")))
@@ -77,7 +93,7 @@ public class ResourceServiceImpl implements ResourceService {
 
   @Override
   public ResourceView get(String id) {
-    ResourceEntity e = resources.selectById(id);
+    ResourceEntity e = cache.resource(id, () -> resources.selectById(id));
     if (e == null) throw BusinessException.missing("资源不存在");
     return view(e, null);
   }
@@ -89,9 +105,29 @@ public class ResourceServiceImpl implements ResourceService {
     ResourceEntity e = resources.lock(id);
     if (e == null) throw BusinessException.missing("资源不存在");
     e.setEnabled(enabled);
+    e.setSearchVersion(e.getSearchVersion() + 1);
     resources.updateById(e);
     operations.audit(actor, "SET_RESOURCE_STATUS", id, enabled ? "启用资源" : "停用资源，已有预约不变");
+    cache.invalidateAfterCommit(id);
+    outbox.enqueue("RESOURCE_CHANGED", id);
     return view(e, null);
+  }
+
+  @Override
+  @Transactional
+  public ResourceView updateSearchProfile(UserView actor, String id, SearchProfileRequest request) {
+    if (actor.role() != Role.ADMIN) throw BusinessException.forbidden();
+    ResourceEntity resource = resources.lock(id);
+    if (resource == null) throw BusinessException.missing("资源不存在");
+    resource.setLatitude(java.math.BigDecimal.valueOf(request.latitude()));
+    resource.setLongitude(java.math.BigDecimal.valueOf(request.longitude()));
+    resource.setDescription(request.description().trim());
+    resource.setSearchVersion(resource.getSearchVersion() + 1);
+    resources.updateById(resource);
+    cache.invalidateAfterCommit(id);
+    outbox.enqueue("RESOURCE_CHANGED", id);
+    operations.audit(actor, "UPDATE_SEARCH_PROFILE", id, "更新资源位置和设施描述");
+    return view(resource, null);
   }
 
   private static ResourceView view(ResourceEntity e, Boolean available) {
@@ -105,6 +141,9 @@ public class ResourceServiceImpl implements ResourceService {
         e.getPowerKw(),
         e.getHourlyRate(),
         e.getEnabled(),
-        available);
+        available,
+        e.getLatitude(),
+        e.getLongitude(),
+        e.getDescription());
   }
 }

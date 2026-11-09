@@ -10,7 +10,7 @@ public interface IncidentMapper extends BaseMapper<IncidentEntity> {
       INSERT INTO operation_incident(id,source_type,source_id,resource_id,booking_id,title,detail,status,created_at)
       VALUES(#{id},#{sourceType},#{sourceId},#{resourceId},#{bookingId},#{title},#{detail},'OPEN',#{createdAt})
       ON DUPLICATE KEY UPDATE title=VALUES(title),detail=VALUES(detail),status='OPEN',
-        resolution=NULL,resolved_by=NULL,resolved_at=NULL
+        resolution=NULL,resolved_by=NULL,resolved_at=NULL,search_version=search_version+1
       """)
   void reopen(IncidentEntity incident);
 }

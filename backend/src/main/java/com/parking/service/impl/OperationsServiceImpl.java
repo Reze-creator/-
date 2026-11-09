@@ -16,10 +16,12 @@ import com.parking.mapper.BookingMapper;
 import com.parking.mapper.DeviceEventMapper;
 import com.parking.mapper.DeviceMapper;
 import com.parking.mapper.IncidentMapper;
+import com.parking.mapper.OutboxMapper;
 import com.parking.mapper.ResourceMapper;
 import com.parking.mapper.UsageBillMapper;
 import com.parking.mapper.UsageSessionMapper;
 import com.parking.service.OperationsService;
+import com.parking.service.OutboxService;
 import com.parking.vo.AuditView;
 import com.parking.vo.IncidentView;
 import com.parking.vo.UserView;
@@ -53,6 +55,8 @@ public class OperationsServiceImpl implements OperationsService {
   private final Clock clock;
   private final MeterRegistry metrics;
   private final long offlineSeconds;
+  private final OutboxService outbox;
+  private final OutboxMapper outboxMapper;
 
   public OperationsServiceImpl(
       IncidentMapper incidents,
@@ -65,6 +69,8 @@ public class OperationsServiceImpl implements OperationsService {
       ResourceMapper resources,
       Clock clock,
       MeterRegistry metrics,
+      OutboxService outbox,
+      OutboxMapper outboxMapper,
       @Value("${parking.device-offline-seconds:120}") long offlineSeconds) {
     this.incidents = incidents;
     this.audits = audits;
@@ -77,9 +83,12 @@ public class OperationsServiceImpl implements OperationsService {
     this.clock = clock;
     this.metrics = metrics;
     this.offlineSeconds = offlineSeconds;
+    this.outbox = outbox;
+    this.outboxMapper = outboxMapper;
   }
 
   @Override
+  @Transactional
   public void report(
       String type,
       String sourceId,
@@ -87,6 +96,14 @@ public class OperationsServiceImpl implements OperationsService {
       String bookingId,
       String title,
       String detail) {
+    IncidentEntity previous =
+        incidents.selectOne(
+            new QueryWrapper<IncidentEntity>().eq("source_type", type).eq("source_id", sourceId));
+    // 定时扫描重复看到同一未恢复异常时，不制造新的索引消息或递增无意义版本。
+    if (previous != null
+        && "OPEN".equals(previous.getStatus())
+        && Objects.equals(title, previous.getTitle())
+        && Objects.equals(detail, previous.getDetail())) return;
     IncidentEntity incident = new IncidentEntity();
     incident.setId(UUID.randomUUID().toString());
     incident.setSourceType(type);
@@ -97,6 +114,10 @@ public class OperationsServiceImpl implements OperationsService {
     incident.setDetail(detail);
     incident.setCreatedAt(clock.instant());
     incidents.reopen(incident);
+    IncidentEntity saved =
+        incidents.selectOne(
+            new QueryWrapper<IncidentEntity>().eq("source_type", type).eq("source_id", sourceId));
+    outbox.enqueue("INCIDENT_CHANGED", saved.getId());
   }
 
   @Override
@@ -139,7 +160,9 @@ public class OperationsServiceImpl implements OperationsService {
     incident.setResolution(resolution.trim());
     incident.setResolvedBy(actor.id());
     incident.setResolvedAt(clock.instant());
+    incident.setSearchVersion(incident.getSearchVersion() + 1);
     incidents.updateById(incident);
+    outbox.enqueue("INCIDENT_CHANGED", incident.getId());
     audit(actor, "RESOLVE_INCIDENT", id, resolution.trim());
     return view(incident);
   }
@@ -149,7 +172,11 @@ public class OperationsServiceImpl implements OperationsService {
   }
 
   private void requireRecovered(IncidentEntity incident) {
-    if (incident.getSourceType().startsWith("DEVICE_")) {
+    if ("MESSAGE_FAILURE".equals(incident.getSourceType())) {
+      com.parking.entity.OutboxEntity message = outboxMapper.selectById(incident.getSourceId());
+      if (message == null || !"DONE".equals(message.getStatus()))
+        throw BusinessException.conflict("请先恢复依赖并重试消息，待其完成后再关单");
+    } else if (incident.getSourceType().startsWith("DEVICE_")) {
       DeviceEntity device = devices.selectById(incident.getResourceId());
       if (device == null
           || Boolean.TRUE.equals(device.getFault())

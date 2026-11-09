@@ -71,9 +71,9 @@ public class WebConfig implements WebMvcConfigurer {
     return new OpenAPI()
         .info(
             new Info()
-                .title("泊序 Parking · 预约 会话与运营接口")
-                .version("2.0.0")
-                .description("时段预约、模拟设备、停车充电会话、模拟结算与运营；AI模块暂缓。设备操作仅限管理员。"))
+                .title("泊序 Parking · 预约 履约 消息与搜索接口")
+                .version("3.0.0")
+                .description("时段预约、异步设备事件、停车充电结算、运营、站内通知及附近搜索；AI模块暂缓。设备操作仅限管理员。"))
         .components(
             new Components()
                 .addSecuritySchemes(

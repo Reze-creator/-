@@ -20,6 +20,7 @@ import com.parking.mapper.ResourceMapper;
 import com.parking.mapper.UsageBillMapper;
 import com.parking.mapper.UsageSessionMapper;
 import com.parking.service.OperationsService;
+import com.parking.service.OutboxService;
 import com.parking.service.SettlementService;
 import com.parking.service.UsageService;
 import com.parking.vo.BillView;
@@ -52,6 +53,7 @@ public class UsageServiceImpl implements UsageService {
   private final Clock clock;
   private final BigDecimal energyRate;
   private final TransactionTemplate transaction;
+  private final OutboxService outbox;
 
   public UsageServiceImpl(
       BookingMapper bookings,
@@ -62,6 +64,7 @@ public class UsageServiceImpl implements UsageService {
       OperationsService operations,
       SettlementService settlement,
       Clock clock,
+      OutboxService outbox,
       PlatformTransactionManager manager,
       @Value("${parking.energy-rate:1.20}") BigDecimal energyRate) {
     this.bookings = bookings;
@@ -72,6 +75,7 @@ public class UsageServiceImpl implements UsageService {
     this.operations = operations;
     this.settlement = settlement;
     this.clock = clock;
+    this.outbox = outbox;
     this.energyRate = energyRate;
     if (energyRate.signum() < 0 || energyRate.scale() > 2)
       throw new IllegalArgumentException("Invalid energy rate");
@@ -123,7 +127,10 @@ public class UsageServiceImpl implements UsageService {
     event.setStatus("WAITING");
     event.setCreatedAt(clock.instant());
     events.insert(event);
-    drain(booking);
+    if (outbox.enabled()) {
+      // 事件和待发送消息一起落库；MQ 暂停时仍可接收，待恢复后由消费者处理。
+      outbox.enqueue("DEVICE_EVENT", event.getId());
+    } else drain(booking);
     operations.audit(
         actor,
         "RECEIVE_DEVICE_EVENT",
@@ -138,6 +145,15 @@ public class UsageServiceImpl implements UsageService {
     // 与预约创建、支付和取消一致：资源锁在前，预约锁在后。
     resources.lock(snapshot.getResourceId());
     return bookings.lock(id);
+  }
+
+  @Override
+  @Transactional(isolation = Isolation.READ_COMMITTED)
+  public void processPendingEvent(String eventId) {
+    DeviceEventEntity event = events.selectById(eventId);
+    if (event == null) throw new IllegalStateException("Device event missing");
+    BookingEntity booking = lockBooking(event.getBookingId());
+    drain(booking);
   }
 
   private EventView replay(DeviceEventEntity event, String fingerprint) {

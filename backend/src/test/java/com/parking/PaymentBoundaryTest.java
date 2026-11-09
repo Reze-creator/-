@@ -27,6 +27,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 /** 用可控时钟和数据库写入阻塞，复现支付检查在截止前而提交在截止后的竞争。 */
 @SpringBootTest(
     properties = {
+      "parking.redis-enabled=false",
+      "parking.messaging-enabled=false",
+      "parking.search-enabled=false",
       "spring.datasource.url=jdbc:h2:mem:boundary;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=15000",
       "spring.datasource.username=sa",
       "spring.datasource.password=",

@@ -25,6 +25,9 @@ defineEmits(['reserve'])
     <p class="resource-park">
       <Icon name="pin" :size="14" />
       {{ resource.parkName }}
+      <span v-if="resource.distanceKm != null">
+        · 距指定位置 {{ resource.distanceKm.toFixed(2) }} km
+      </span>
     </p>
     <div class="resource-tags">
       <span>

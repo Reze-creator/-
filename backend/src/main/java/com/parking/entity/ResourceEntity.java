@@ -21,5 +21,9 @@ public class ResourceEntity {
   private Integer powerKw;
   private BigDecimal hourlyRate;
   private Boolean enabled;
+  private BigDecimal latitude;
+  private BigDecimal longitude;
+  private String description;
+  private Long searchVersion;
   private Instant createdAt;
 }
